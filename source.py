@@ -141,7 +141,7 @@
 
 # ## Data Visualization and Insights
 
-# In[ ]:
+# In[3]:
 
 
 import pandas as pd
@@ -279,6 +279,7 @@ student_performance_df['race/ethnicity'] = pd.Categorical(student_performance_df
 
 print("Updated data types in Screen Time Data:")
 print(screen_time_df.dtypes)
+
 print("\nUpdated data types in Student Performance Data:")
 print(student_performance_df.dtypes)
 
@@ -378,13 +379,13 @@ print(student_performance_df[['average_score', 'score_range']].describe())
 # 
 # 1. **Data Type Transformations**
 #    - Converted dates to datetime format
-#    - Made 'Week Day' a proper categorical variable
+#    - Made Week Day a proper categorical variable
 #    - Ensured numeric types for all measurement columns
 #    - Converted categorical variables in student performance data
 # 
 # 2. **Missing Values and Duplicates**
 #    - Checked both datasets for missing values
-#    - Filled missing activity values with 0 (assuming no activity)
+#    - Filled missing activity values with 0 
 #    - Removed duplicate entries to prevent bias
 #    - Verified all missing values were handled appropriately
 # 
@@ -412,19 +413,216 @@ print(student_performance_df[['average_score', 'score_range']].describe())
 # 
 # 
 
+# ## Check Point 3
+
+# 1. Machine Learning Plan
+# 
+#     What type of machine learning model are you planning to use?
+# 
+#     I  plan to use a supervised learning classification model, such as a Random Forest or Gradient Boosted Trees, because the project involves predicting outcomes based on labeled historical data.
+# 
+#     What are the challenges have you identified/are you anticipating in building your machine learning model?
+# 
+#     A key challenge will be data quality and feature selection, since missing values, inconsistent formats, and irrelevant variables can reduce model accuracy and reliability.
+# 
+#     How are you planning to address these challenges?
+# 
+#     I will implement a preprocessing pipeline that handles missing data, normalizes inputs, and applies feature importance analysis to select the most relevant variables, ensuring the model remains accurate and generalizable.
+# 
+
+# 2. Machine Learning Implementation Process
+# 
+#     (Ask, Prepare, Process, Analyze, Evaluate, Share)
+# 
+#     Ask: The project begins by defining the problem and identifying the target variable. The goal is to build a predictive model that can generate accurate and generalizable results
+# 
+#     Prepare: I'll perform Exploratory Data Analysis to identify issues such as missing values, outliers, and inconsistent formats. This step provides insight into the dataset’s structure and highlights potential problems. After EDA, I'll split the dataset into training and test sets to ensure unbiased evaluation of the model.
+# 
+#     Process: 
+# 
+#     Data Cleaning with Scikit‑Learn Pipelines: I'll use pipelines to automate preprocessing steps, ensuring reproducibility and consistency.
+# 
+#     Data Imputation: Missing values are handled using mean/median for numerical features and mode or constant values for categorical features.
+# 
+#     Scaling and Normalization: I'll apply techniques like StandardScaler or MinMaxScaler to bring numerical features onto comparable scales.
+# 
+#     Handling Categorical Data: I'll encode categorical variables using One‑Hot Encoding or Ordinal Encoding depending on the feature type.
+# 
+#     Analyze: I'll train and test multiple algorithms, such as Logistic Regression, Random Forest, Gradient Boosted Trees, Support Vector Machines, and Neural Networks.
+# 
+#     Evaluate: I'll compare models using appropriate metrics
+# 
+#     Share: I'll then document the entire process, including EDA findings, preprocessing steps, and model evaluation results
+# 
+
+# In[ ]:
+
+
+# 1. Project Configuration
+
+DATA_PATH = "dataSources/StudentsPerformance.csv"
+TARGET_COL = "math score"  
+TASK_TYPE = "regression"   
+TEST_SIZE = 0.2
+RANDOM_STATE = 42
+DROP_COLS = []  
+
+# 2. Load Data + EDA
+
+import pandas as pd
+import numpy as np
+
+df = pd.read_csv(DATA_PATH)
+if DROP_COLS:
+    df = df.drop(columns=DROP_COLS, errors="ignore")
+
+print("Shape:", df.shape)
+print("\nInfo:")
+print(df.info())
+print("\nMissing values:")
+print(df.isnull().sum())
+print("\nNumeric Summary:")
+print(df.describe())
+print("\nCategorical Columns:")
+print(df.select_dtypes(include=["object", "category"]).columns.tolist())
+
+# 3. Split Data
+
+from sklearn.model_selection import train_test_split
+
+X = df.drop(columns=[TARGET_COL])
+y = df[TARGET_COL]
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE
+)
+
+# 4. Preprocessing Pipeline
+
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+
+numeric_features = X.select_dtypes(include=[np.number]).columns.tolist()
+categorical_features = X.select_dtypes(include=["object", "category"]).columns.tolist()
+
+numeric_pipeline = Pipeline([
+    ("imputer", SimpleImputer(strategy="median")),
+    ("scaler", StandardScaler())
+])
+
+categorical_pipeline = Pipeline([
+    ("imputer", SimpleImputer(strategy="most_frequent")),
+    ("encoder", OneHotEncoder(handle_unknown="ignore"))
+])
+
+preprocessor = ColumnTransformer([
+    ("num", numeric_pipeline, numeric_features),
+    ("cat", categorical_pipeline, categorical_features)
+])
+
+# 5. Train Multiple Models
+
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.svm import SVR
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+
+models = {
+    "LinearRegression": LinearRegression(),
+    "RandomForestRegressor": RandomForestRegressor(),
+    "GradientBoostingRegressor": GradientBoostingRegressor(),
+    "SVR": SVR()
+}
+
+results = []
+
+for name, model in models.items():
+    pipe = Pipeline([
+        ("preprocessor", preprocessor),
+        ("model", model)
+    ])
+    pipe.fit(X_train, y_train)
+    y_pred = pipe.predict(X_test)
+
+    results.append({
+        "model": name,
+        "rmse": np.sqrt(mean_squared_error(y_test, y_pred)),
+        "mae": mean_absolute_error(y_test, y_pred),
+        "r2": r2_score(y_test, y_pred)
+    })
+
+results_df = pd.DataFrame(results)
+display(results_df.sort_values(by="rmse"))
+
+#  6. Select Best Model + Save
+
+import joblib
+
+best_model_name = results_df.sort_values(by="rmse").iloc[0]["model"]
+print("Best model:", best_model_name)
+
+final_model = models[best_model_name]
+final_pipeline = Pipeline([
+    ("preprocessor", preprocessor),
+    ("model", final_model)
+])
+final_pipeline.fit(X_train, y_train)
+
+joblib.dump(final_pipeline, "final_model.pkl")
+print("Model saved as final_model.pkl")
+
+
+# Conclusion: Based on these results, I will select Linear Regression as the final model. It provides the most accurate predictions with the simplest and most interpretable structure, making it a strong choice for explaining how student features relate to math performance.
+# 
+
+# ## Prior Feedback and Updates
+# 
+# - What feedback did you receive from your peers and/or the teaching team?
+#     - Feed back from check point 2 was to add more analytical commentary, include correlation plots to show statistical connections, and be more transparent about my data cleaning decisions
+# - What changes have you made to your project based on this feedback?
+#     - While I did not make major changes at that stage, the comments helped me think about how to strengthen my analysis, improve transparency, and prepare for the machine learning portion of the project.
+# 
+# 
+
 # ## Resources and References
 # *What resources and references have you used for this project?*
 # 📝 <!-- Answer Below -->
 # ##
 # https://pandas.pydata.org/docs/
-# https://docs.python.org/3/library/sqlite3.html
+# 
 # https://requests.readthedocs.io/en/latest/
+# 
 # https://www.crummy.com/software/BeautifulSoup/bs4/doc/
+# 
 # https://github.com/Kaggle/kaggle-api
+# 
 # https://seaborn.pydata.org/
 # 
+# https://numpy.org/doc/
+# 
+# https://docs.scipy.org/doc/scipy/
+# 
+# https://docs.python.org/3/library/sqlite3.html
+# 
+# https://scikit-learn.org/stable/index.html
+# 
+# https://matplotlib.org/stable/users/index.html
+# 
+# https://scikit-learn.org/stable/modules/model_evaluation.html
+# 
+# https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html
+# 
+# https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html
+# 
+# https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestRegressor.html
+# 
+# https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.GradientBoostingRegressor.html
+# 
+# https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVR.html
 
-# In[1]:
+# In[7]:
 
 
 # ⚠️ Make sure you run this cell at the end of your notebook before every submission!
